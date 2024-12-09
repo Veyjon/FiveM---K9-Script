@@ -1,0 +1,1 @@
+print('K9 Script by Veyjon Loaded!')
