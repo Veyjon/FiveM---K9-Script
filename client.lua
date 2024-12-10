@@ -1,10 +1,54 @@
 --[[ Dog Script ]] --
 
--- Default Variables
-
 local dogBreeds = {"Rottweiler", "Husky", "Retriever", "Shepherd"}
 local dogBHash = {"a_c_rottweiler", "a_c_husky", "a_c_retriever", "a_c_shepherd"}
 local dogTypes = {"Search", "General Purpose"}
+local dogModelHashes = {
+    Rottweiler = GetHashKey("a_c_rottweiler"),
+    Husky = GetHashKey("a_c_husky"),
+    Retriever = GetHashKey("a_c_retriever"),
+    Shepherd = GetHashKey("a_c_shepherd")
+}
+
+local DogState = {
+    entity = nil,
+    name = nil,
+    blip = nil,
+    breed = nil
+}
+
+local function ResetDogState()
+    if DogState.blip then
+        RemoveBlip(DogState.blip)
+    end
+    DogState = {
+        entity = nil,
+        name = nil,
+        blip = nil,
+        breed = nil
+    }
+end
+
+local function SafeModelRequest(modelHash)
+    if not HasModelLoaded(modelHash) then
+        RequestModel(modelHash)
+        local timeout = 0
+        while not HasModelLoaded(modelHash) and timeout < 100 do
+            Citizen.Wait(50)
+            timeout = timeout + 1
+        end
+        
+        if not HasModelLoaded(modelHash) then
+            print("Failed to load model: " .. modelHash)
+            return false
+        end
+    end
+    return true
+end
+
+local function ValidateDogName(name)
+    return name ~= nil and name ~= "" and #name <= 30
+end
 
 local k91 = nil
 local k91Name = nil
@@ -32,10 +76,10 @@ Citizen.CreateThread(
                         end
                         if (GetOnscreenKeyboardResult()) then
                             k91Name = GetOnscreenKeyboardResult()
-                            -- Close the keyboard and menu once a name is entered
                             if k91Name ~= "" then
-                                -- Close the menu and continue to the next action
                                 WarMenu.CloseMenu()
+
+                                WarMenu.OpenMenu(maink9)
                             else
                                 AdvancedNotification(
                                     "CHAR_FLOYD",
@@ -56,6 +100,9 @@ Citizen.CreateThread(
                             function(currentIndex, selectedIndex)
                                 currentDogIndex = currentIndex
                                 selectedDogIndex = selectedIndex
+                                print("Updated currentDogIndex: " .. currentDogIndex)
+                                print("Updated selectedDogIndex:" .. selectedDogIndex)
+                                print("Selected Breed:" .. dogBreeds[currentDogIndex])
                             end
                         )
                      then
@@ -70,13 +117,13 @@ Citizen.CreateThread(
                                 "Must set dog name!"
                             )
                         else
-                            -- Spawning
+                            
                             RequestModel(GetHashKey(dogBHash[currentDogIndex]))
                             while not HasModelLoaded(GetHashKey(dogBHash[currentDogIndex])) do
                                 Citizen.Wait(1)
                             end
 
-                            -- Spawn the dog
+                            
                             local pos = GetOffsetFromEntityInWorldCoords(PlayerPedId(), 0.0, 2.0, 0.0)
                             local heading = GetEntityHeading(GetPlayerPed(-1))
                             local _, groundZ = GetGroundZFor_3dCoord(pos.x, pos.y, pos.z, false)
@@ -93,7 +140,30 @@ Citizen.CreateThread(
                                 true
                             )
 
-                            -- Friendly Relationship Setup
+                            local function SetupDogRelationships(dog)
+                                local civMaleHash = GetHashKey("CIVMALE")
+                                SetPedRelationshipGroupDefaultHash(dog, civMaleHash)
+                                SetPedRelationshipGroupHash(dog, civMaleHash)
+                                
+                                
+                                SetRelationshipBetweenGroups(0, civMaleHash, GetHashKey("PLAYER"))
+                            end
+
+                            local function CreateDogBlip(dog, name)
+                                local blip = AddBlipForEntity(dog)
+                                SetBlipAsFriendly(blip, true)
+                                SetBlipDisplay(blip, 2)
+                                SetBlipShowCone(blip, true)
+                                SetBlipAsShortRange(blip, false)
+                                
+                                BeginTextCommandSetBlipName("STRING")
+                                AddTextComponentString(name)
+                                EndTextCommandSetBlipName(blip)
+                                
+                                return blip
+                            end
+
+                            
                             GiveWeaponToPed(k91, GetHashKey("WEAPON_ANIMAL"), true, true)
                             TaskSetBlockingOfNonTemporaryEvents(k91, true)
                             SetPedRelationshipGroupDefaultHash(k91, GetHashKey("CIVMALE"))
@@ -101,19 +171,19 @@ Citizen.CreateThread(
                             SetRelationshipBetweenGroups(0, GetHashKey("CIVMALE"), GetHashKey("PLAYER"))
                             SetRelationshipBetweenGroups(0, GetHashKey("PLAYER"), GetHashKey("CIVMALE"))
 
-                            -- Prevent dog from running away
-                            SetPedFleeAttributes(k91, 0, true)  -- Disable fleeing completely
-                            SetPedCombatAttributes(k91, 3, false)  -- No combat avoidance
-                            SetPedCombatAttributes(k91, 5, false)  -- Don't flee from danger
-                            SetPedCombatAttributes(k91, 46, true)  -- Enable combat response
-                            SetPedCombatAttributes(k91, 1, true)   -- Always fight
-                            SetPedCombatAbility(k91, 2)  -- Set high combat ability
-                            SetPedAlertness(k91, 2)  -- Set high alertness
-                            SetEntityInvincible(k91, false)  -- Optional: make dog invincible
-                            SetPedCanRagdollFromPlayerImpact(k91, false)  -- Prevent ragdolling from player impact
+                            
+                            SetPedFleeAttributes(k91, 0, true)  
+                            SetPedCombatAttributes(k91, 3, false)  
+                            SetPedCombatAttributes(k91, 5, false)  
+                            SetPedCombatAttributes(k91, 46, true)  
+                            SetPedCombatAttributes(k91, 1, true)   
+                            SetPedCombatAbility(k91, 2)  
+                            SetPedAlertness(k91, 2)  
+                            SetEntityInvincible(k91, false)  
+                            SetPedCanRagdollFromPlayerImpact(k91, false)  
                             SetEntityHealth(k91, 250)
 
-                            -- Blip Stuff
+                            
                             blipk91 = AddBlipForEntity(k91)
                             SetBlipAsFriendly(blipk91, true)
                             SetBlipDisplay(blipk91, 2)
@@ -172,13 +242,163 @@ Citizen.CreateThread(
                 end
 
                 WarMenu.Display()
+
             end
 
             Citizen.Wait(0)
+
         end
 
-        -- End of Loop
+
     end
+)
+
+local function ValidateSearchTarget(targetId)
+    local targetPed = GetPlayerPed(GetPlayerFromServerId(targetId))
+    return DoesEntityExist(targetPed), targetPed
+end
+
+local function IsTargetInSearchRange(dogPos, targetPos, maxDistance)
+    return Vdist(dogPos.x, dogPos.y, dogPos.z, targetPos.x, targetPos.y, targetPos.z) <= maxDistance
+end
+
+local function PerformK9Search(dog, target)
+    TriggerEvent('chat:addMessage', {
+        color = {0, 255, 0},
+        multiline = true,
+        args = {"K9", "K9 is searching the player!"}
+    })
+
+    Citizen.CreateThread(function()
+        local searchDuration = math.random(3000, 10000)
+        local startTime = GetGameTimer()
+        local targetPos = GetEntityCoords(target)
+        local searchAnimations = {
+            "WORLD_DOG_SNIFF_GROUND",
+            "WORLD_DOG_BARK",
+            "WORLD_DOG_SITTING"
+        }
+        local searchSounds = {
+            "BARK_SMALL_DOG_01",
+            "BARK_SMALL_DOG_02",
+            "BARK_MED_DOG_01",
+            "BARK_MED_DOG_02"
+        }
+
+        local positions = {}
+        for i = 1, 10 do
+            local angle = i * 36  
+            local radius = 2.0  
+            
+            local offsetX = math.cos(math.rad(angle)) * radius
+            local offsetY = math.sin(math.rad(angle)) * radius
+            
+            local newX = targetPos.x + offsetX
+            local newY = targetPos.y + offsetY
+            local newZ = targetPos.z
+
+            table.insert(positions, vector3(newX, newY, newZ))
+        end
+
+        for _, pos in ipairs(positions) do
+            TaskGoToCoordAnyMeans(dog, pos.x, pos.y, pos.z, 1.75, 0, 0, 786603, 0xbf800000)
+            
+            local arrived = false
+            Citizen.CreateThread(function()
+                while not arrived do
+                    local currentPos = GetEntityCoords(dog)
+                    local distance = #(currentPos - pos)
+                    
+                    if distance < 1.0 then
+                        arrived = true
+                    end
+                    Citizen.Wait(100)
+                end
+            end)
+
+            while not arrived do
+                Citizen.Wait(100)
+            end
+        end
+
+        while GetGameTimer() - startTime < searchDuration do
+            local randomAnim = searchAnimations[math.random(#searchAnimations)]
+            TaskStartScenarioInPlace(dog, randomAnim, 0, true)
+
+            if math.random() < 0.3 then
+                local randomSound = searchSounds[math.random(#searchSounds)]
+                PlaySound(dog, randomSound, "BARK_SMALL_DOG_SOUNDSET")
+            end
+
+            Citizen.Wait(math.random(2000, 5000))
+        end
+
+        TriggerEvent('chat:addMessage', {
+            color = {0, 255, 0},
+            multiline = true,
+            args = {"K9", "Player search completed."}
+        })
+
+        ClearPedTasks(dog)
+
+
+        TriggerServerEvent('k9:getPlayerName', GetPlayerServerId(NetworkGetPlayerIndexFromPed(target)))
+    end)
+end
+
+local function SafeExecuteCommand(commandFunc)
+    return function(source, args, rawCommand)
+        local success, err = pcall(commandFunc, source, args, rawCommand)
+        if not success then
+            print("Command error: " .. tostring(err))
+            TriggerEvent('chat:addMessage', {
+                color = {255, 0, 0},
+                multiline = true,
+                args = {"Error", "An unexpected error occurred."}
+            })
+        end
+    end
+end
+
+RegisterCommand(
+    "searchp",
+    function(source, args, rawCommand)
+        if not k91 then
+            return AdvancedNotification("CHAR_FLOYD", "uber", 7, "~g~Veyjon", "K9 Script", "You do not have a dog spawned!")
+        end
+
+        if not CooldownManager:Check("searchPlayer") then
+            return
+        end
+
+        local targetId = tonumber(args[1])
+        if not targetId then
+            return TriggerEvent('chat:addMessage', {
+                color = {255, 0, 0},
+                multiline = true,
+                args = {"Error", "You must specify a valid player ID."}
+            })
+        end
+
+        local isValidTarget, targetPlayer = ValidateSearchTarget(targetId)
+        if not isValidTarget then
+            return TriggerEvent('chat:addMessage', {
+                color = {255, 0, 0},
+                multiline = true,
+                args = {"Error", "Invalid player specified or not found."}
+            })
+        end
+
+        local dogPos = GetEntityCoords(k91)
+        local targetPos = GetEntityCoords(targetPlayer)
+
+        if not IsTargetInSearchRange(dogPos, targetPos, 10.0) then
+            return AdvancedNotification("CHAR_FLOYD", "uber", 7, "~g~Veyjon", "K9 Search", "~r~Target player is too far away for K9 search!")
+        end
+
+        PerformK9Search(k91, targetPlayer)
+    end,
+    false
 )
 
 RegisterCommand(
@@ -189,42 +409,362 @@ RegisterCommand(
     false
 )
 
+local function FindAttackTarget(args)
+    local target = nil
+    
+    if args[1] then
+        local targetId = tonumber(args[1])
+        target = targetId and GetPlayerPed(GetPlayerFromServerId(targetId))
+    end
+    
+    if not target and IsPlayerFreeAiming(PlayerId()) then
+        local _, aimedTarget = GetEntityPlayerIsFreeAimingAt(PlayerId())
+        target = IsEntityAPed(aimedTarget) and aimedTarget
+    end
+    
+    target = target or GetPedInFront()
+    
+    return target
+end
+
 RegisterCommand(
     "att",
     function(source, args, rawCommand)
-        if k91 then
-            DetachEntity(k91)
+        if not k91 then
+            return AdvancedNotification("CHAR_FLOYD", "uber", 7, "~g~Veyjon", "K9 Script", "No K9 spawned to execute attack!")
+        end
 
-            local handler = PlayerPedId()
+        local target = FindAttackTarget(args)
+        
+        if not target or target == PlayerPedId() then
+            return AdvancedNotification("CHAR_FLOYD", "uber", 7, "~g~Veyjon", "K9 Script", "No valid target found!")
+        end
 
-            -- Restore player targeting for the dog
-            SetPedCanBeTargettedByPlayer(k91, PlayerPedId(), true)
-            SetPedCanBeDamagedByPlayerPawn(k91, PlayerPedId(), true)
+        DetachEntity(k91)
+        ClearPedTasks(k91)
+        TaskCombatPed(k91, target, 0, 16)
+        AdvancedNotification("CHAR_FLOYD", "uber", 7, "~g~Veyjon", "K9 Script", k91Name .. " is attacking the target!")
+    end,
+    false
+)
 
-            if args[1] then
-                local target = GetPlayerPed(GetPlayerFromServerId(tonumber(args[1])))
-                ClearPedTasks(k91)
+local searchPlayerCooldown = 0
+local searchVehicleCooldown = 0
+local COOLDOWN_TIME = 30
 
-                if IsEntityAPed(target) and target ~= handler then
-                    TaskCombatPed(k91, target, 0, 16)
-                end
-            elseif IsPlayerFreeAiming(PlayerId()) then
-                local _, target = GetEntityPlayerIsFreeAimingAt(PlayerId())
-                ClearPedTasks(k91)
+local function checkCooldown(cooldownType)
+    local currentTime = GetGameTimer()
+    
+    if cooldownType == "player" then
+        if currentTime < searchPlayerCooldown then
+            local remainingTime = math.ceil((searchPlayerCooldown - currentTime) / 1000)
+            TriggerEvent('chat:addMessage', {
+                color = {255, 0, 0},
+                multiline = true,
+                args = {"Error", "You must wait " .. remainingTime .. " seconds before searching again."}
+            })
+            return false
+        end
+        searchPlayerCooldown = currentTime + (COOLDOWN_TIME * 1000)
+    elseif cooldownType == "vehicle" then
+        if currentTime < searchVehicleCooldown then
+            local remainingTime = math.ceil((searchVehicleCooldown - currentTime) / 1000)
+            TriggerEvent('chat:addMessage', {
+                color = {255, 0, 0},
+                multiline = true,
+                args = {"Error", "You must wait " .. remainingTime .. " seconds before searching again."}
+            })
+            return false
+        end
+        searchVehicleCooldown = currentTime + (COOLDOWN_TIME * 1000)
+    end
+    
+    return true
+end
 
-                if IsEntityAPed(target) and target ~= handler then
-                    TaskCombatPed(k91, target, 0, 16)
-                end
+RegisterCommand(
+    "searchp",
+    function(source, args, rawCommand)
+        if not k91 then
+            AdvancedNotification("CHAR_FLOYD", "uber", 7, "~g~Veyjon", "K9 Script", "You do not have a dog spawned!")
+            return
+        end
+
+        if not checkCooldown("player") then
+            return
+        end
+
+        local targetId = tonumber(args[1])
+        if not targetId then
+            TriggerEvent('chat:addMessage', {
+                color = {255, 0, 0},
+                multiline = true,
+                args = {"Error", "You must specify a valid player ID."}
+            })
+            return
+        end
+
+        local targetPlayer = GetPlayerPed(GetPlayerFromServerId(targetId))
+
+        if DoesEntityExist(targetPlayer) then
+            local targetPos = GetEntityCoords(targetPlayer)
+            local playerPed = PlayerPedId()
+            local dogPos = GetEntityCoords(k91) 
+
+
+            local distance = Vdist(dogPos.x, dogPos.y, dogPos.z, targetPos.x, targetPos.y, targetPos.z)
+
+            local maxDistance = 10.0
+
+            -- If the player is within the allowed distance, trigger the search
+            if distance <= maxDistance then
+                -- Broadcast to all players that K9 is searching the player
+                TriggerEvent('chat:addMessage', {
+                    color = {0, 255, 0},
+                    multiline = true,
+                    args = {"K9", "K9 is searching the player!"}
+                })
+
+                -- Start the K9 search animation
+                Citizen.CreateThread(function()
+                    -- Search duration and animations
+                    local searchDuration = math.random(3000, 10000) -- 3-10 seconds of search time
+                    local startTime = GetGameTimer()
+                    local searchAnimations = {
+                        "WORLD_DOG_SNIFF_GROUND",
+                        "WORLD_DOG_BARK",
+                        "WORLD_DOG_SITTING"
+                    }
+                    local searchSounds = {
+                        "BARK_SMALL_DOG_01",
+                        "BARK_SMALL_DOG_02",
+                        "BARK_MED_DOG_01",
+                        "BARK_MED_DOG_02"
+                    }
+
+                    -- Circular movement points
+                    local positions = {}
+                    for i = 1, 10 do
+                        local angle = i * 36  -- 10 steps, 36 degrees apart
+                        local radius = 2.0  -- 2 meters from target
+                        
+                        local offsetX = math.cos(math.rad(angle)) * radius
+                        local offsetY = math.sin(math.rad(angle)) * radius
+                        
+                        local newX = targetPos.x + offsetX
+                        local newY = targetPos.y + offsetY
+                        local newZ = targetPos.z
+
+                        table.insert(positions, vector3(newX, newY, newZ))
+                    end
+
+                    -- Walk to each position
+                    for _, pos in ipairs(positions) do
+                        -- Use TaskGoToCoordAnyMeans with increased speed of 1.75
+                        TaskGoToCoordAnyMeans(k91, pos.x, pos.y, pos.z, 1.75, 0, 0, 786603, 0xbf800000)
+                        
+                        -- Wait until near the destination
+                        local arrived = false
+                        Citizen.CreateThread(function()
+                            while not arrived do
+                                local currentPos = GetEntityCoords(k91)
+                                local distance = #(currentPos - pos)
+                                
+                                if distance < 1.0 then
+                                    arrived = true
+                                end
+                                Citizen.Wait(100)
+                            end
+                        end)
+
+                        -- Wait for the dog to get close to the position
+                        while not arrived do
+                            Citizen.Wait(100)
+                        end
+                    end
+
+                    -- Search loop
+                    while GetGameTimer() - startTime < searchDuration do
+                        -- Random animation
+                        local randomAnim = searchAnimations[math.random(#searchAnimations)]
+                        TaskStartScenarioInPlace(k91, randomAnim, 0, true)
+
+                        -- Occasional sound
+                        if math.random() < 0.3 then
+                            local randomSound = searchSounds[math.random(#searchSounds)]
+                            PlaySound(k91, randomSound, "BARK_SMALL_DOG_SOUNDSET")
+                        end
+
+                        -- Wait a bit before next action
+                        Citizen.Wait(math.random(2000, 5000))
+                    end
+
+                    -- Final actions
+                    TriggerEvent('chat:addMessage', {
+                        color = {0, 255, 0},
+                        multiline = true,
+                        args = {"K9", "Player search completed."}
+                    })
+
+                    -- Clear tasks
+                    ClearPedTasks(k91)
+
+                    -- Trigger server event to start the search
+                    TriggerServerEvent('k9:getPlayerName', targetId)
+                end)
             else
-                local target = GetPedInFront()
-                ClearPedTasks(k91)
-
-                if IsEntityAPed(target) and target ~= handler then
-                    TaskCombatPed(k91, target, 0, 16)
-                end
+                -- Use AdvancedNotification to inform the local player that the target is too far
+                AdvancedNotification("CHAR_FLOYD", "uber", 7, "~g~Veyjon", "K9 Search", "~r~Target player is too far away for K9 search!")
             end
+        else
+            TriggerEvent('chat:addMessage', {
+                color = {255, 0, 0},
+                multiline = true,
+                args = {"Error", "Invalid player specified or not found."}
+            })
         end
     end,
+    false
+)
+
+-- Helper function to get heading between two points
+function GetHeadingFromCoords(x1, y1, z1, x2, y2, z2)
+    local dx = x2 - x1
+    local dy = y2 - y1
+    return math.deg(math.atan2(dy, dx)) - 90
+end
+
+RegisterCommand(
+    "searchv",
+    function(source, args, rawCommand)
+        -- Check if the dog is spawned
+        if not k91 then
+            AdvancedNotification("CHAR_FLOYD", "uber", 7, "~g~Veyjon", "K9 Script", "You do not have a dog spawned!")
+            return
+        end
+
+        -- Check cooldown
+        if not checkCooldown("vehicle") then
+            return
+        end
+
+        local playerPed = PlayerPedId()
+
+        -- First, check if the player is inside a vehicle
+        local vehicle = GetVehiclePedIsIn(playerPed, false) -- false to get the vehicle even if the player is not inside it
+
+        -- If not inside a vehicle, find the closest vehicle nearby
+        if vehicle == 0 then
+            vehicle = GetClosestVehicle(GetEntityCoords(playerPed), 10.0, 0, 71) -- 10m radius, include addon vehicles
+        end
+
+        -- Check if the vehicle exists
+        if DoesEntityExist(vehicle) and vehicle ~= 0 then
+            -- Get vehicle plate
+            local vehiclePlate = GetVehicleNumberPlateText(vehicle)
+
+            -- Trigger a server event to broadcast the message with vehicle plate
+            TriggerServerEvent('k9:broadcastVehicleSearchMessage', "K9 is searching vehicle (Plate: " .. vehiclePlate .. ")")
+            
+            -- Add chat message
+            TriggerEvent('chat:addMessage', {
+                color = {0, 255, 0},
+                multiline = true,
+                args = {"K9", "K9 is searching vehicle (Plate: " .. vehiclePlate .. ")"}
+            })
+
+            -- Get vehicle position
+            local vehiclePos = GetEntityCoords(vehicle)
+
+            -- Search duration and animations
+            Citizen.CreateThread(function()
+                local searchDuration = math.random(3000, 10000) -- 3-10 seconds of search time
+                local startTime = GetGameTimer()
+                local searchAnimations = {
+                    "WORLD_DOG_SNIFF_GROUND",
+                    "WORLD_DOG_BARK",
+                    "WORLD_DOG_SITTING"
+                }
+                local searchSounds = {
+                    "BARK_SMALL_DOG_01",
+                    "BARK_SMALL_DOG_02",
+                    "BARK_MED_DOG_01",
+                    "BARK_MED_DOG_02"
+                }
+
+                -- Initial circling
+                local positions = {}
+                for i = 1, 10 do
+                    local angle = i * 36
+                    local radius = 2.0
+                    
+                    local offsetX = math.cos(math.rad(angle)) * radius
+                    local offsetY = math.sin(math.rad(angle)) * radius
+                    
+                    local newX = vehiclePos.x + offsetX
+                    local newY = vehiclePos.y + offsetY
+                    local newZ = vehiclePos.z
+
+                    table.insert(positions, vector3(newX, newY, newZ))
+                end
+
+                -- Walk to each position
+                for _, pos in ipairs(positions) do
+                    TaskGoToCoordAnyMeans(k91, pos.x, pos.y, pos.z, 1.75, 0, 0, 786603, 0xbf800000)
+                    
+                    local arrived = false
+                    Citizen.CreateThread(function()
+                        while not arrived do
+                            local currentPos = GetEntityCoords(k91)
+                            local distance = #(currentPos - pos)
+                            
+                            if distance < 1.0 then
+                                arrived = true
+                            end
+                            Citizen.Wait(100)
+                        end
+                    end)
+
+                    while not arrived do
+                        Citizen.Wait(100)
+                    end
+                end
+
+                -- Search loop
+                while GetGameTimer() - startTime < searchDuration do
+                    -- Random animation
+                    local randomAnim = searchAnimations[math.random(#searchAnimations)]
+                    TaskStartScenarioInPlace(k91, randomAnim, 0, true)
+
+                    -- Occasional sound
+                    if math.random() < 0.3 then
+                        local randomSound = searchSounds[math.random(#searchSounds)]
+                        PlaySound(k91, randomSound, "BARK_SMALL_DOG_SOUNDSET")
+                    end
+
+                    -- Wait a bit before next action
+                    Citizen.Wait(math.random(2000, 5000))
+                end
+
+                -- Final actions
+                TriggerEvent('chat:addMessage', {
+                    color = {0, 255, 0},
+                    multiline = true,
+                    args = {"K9", "Vehicle search completed for (Plate: " .. vehiclePlate .. ")"}
+                })
+
+                -- Clear tasks
+                ClearPedTasks(k91)
+            end)
+        else
+            -- If no vehicle found
+            TriggerEvent('chat:addMessage', {
+                color = {255, 0, 0},
+                multiline = true,
+                args = {"Error", "No vehicle found nearby."}
+            })
+        end
+    end, 
     false
 )
 
@@ -241,7 +781,7 @@ RegisterCommand("dsu", function()
 end, false)
 
 RegisterCommand("command_follow", function()
-    Command_Follow(k91)  -- Make sure `k91` is correctly defined and set
+    Command_Follow(k91)  
 end, false)
 
 RegisterCommand("command_sit", function()
@@ -259,6 +799,87 @@ end, false)
 RegisterCommand("exitvehicle", function()
     ExitVehicle(k91)
 end, false)
+
+local dogStamina = 300.0
+local maxStamina = 300.0
+local staminaDrainRate = 0.2
+local restRecoveryRate = 1.0
+
+function UpdateDogStamina(dog)
+    -- Drain stamina while tracking
+    if IsEntityFollowingAPath(dog) then
+        dogStamina = math.max(0, dogStamina - staminaDrainRate)
+    end
+    
+    -- Recovery when not tracking
+    if dogStamina < maxStamina and not IsEntityFollowingAPath(dog) then
+        dogStamina = math.min(maxStamina, dogStamina + restRecoveryRate)
+    end
+    
+    -- Stop tracking if exhausted
+    if dogStamina <= 0 then
+        ClearPedTasks(dog)
+        TriggerEvent('chatMessage', '', {255, 165, 0}, "^3Dog is exhausted and cannot continue tracking!")
+    end
+end
+
+function AdvancedTracking(dog, target)
+    -- Create intermittent sniffing behavior
+    CreateThread(function()
+        while IsEntityFollowingAPath(dog) do
+            -- Random sniffing animations
+            if math.random() < 0.1 then
+                RequestAnimDict('creatures@dog@move')
+                TaskPlayAnim(dog, 'creatures@dog@move', 'sniff_idle', 8.0, -8.0, -1, 1, 0, false, false, false)
+            end
+            Wait(1000)
+        end
+    end)
+    
+    -- Add occasional path recalculation
+    CreateThread(function()
+        while IsEntityFollowingAPath(dog) do
+            if math.random() < 0.05 then
+                TaskGoToEntity(dog, target, -1, 0.5, 7.0, 1077936128, 0)
+            end
+            Wait(5000)
+        end
+    end)
+end
+
+function HandleTrackingInterruptions(dog, target)
+    CreateThread(function()
+        while IsEntityFollowingAPath(dog) do
+            local dogCoords = GetEntityCoords(dog)
+            local targetCoords = GetEntityCoords(target)
+            local distance = #(dogCoords - targetCoords)
+            
+            -- Lost target check
+            if distance > 50.0 then
+                TriggerEvent('chatMessage', '', {255, 165, 0}, "^3Dog has lost the trail!")
+                ClearPedTasks(dog)
+                break
+            end
+            
+            Wait(2000)
+        end
+    end)
+end
+
+function GetPedInFront()
+    local playerPed = PlayerPedId()
+    local forwardVector = GetEntityForwardVector(playerPed)
+    local playerCoords = GetEntityCoords(playerPed)
+    local endCoords = playerCoords + forwardVector * 5.0 
+
+    local raycast = StartShapeTestRay(playerCoords.x, playerCoords.y, playerCoords.z, endCoords.x, endCoords.y, endCoords.z, 8, playerPed, 0)
+    local _, hit, _, _, entity = GetShapeTestResult(raycast)
+
+    if hit and IsEntityAPed(entity) then
+        return entity
+    end
+    return nil
+end
 
 -- Function to check if the player is in a vehicle
 function IsPlayerInVehicle()
@@ -283,12 +904,10 @@ function ExitVehicle()
     TaskLeaveVehicle(playerPed, vehicle, 0)  -- Player exits the vehicle
 end
 
--- Register the "exitvehicle" command (could be bound to a key through RegisterKeyMapping as before)
 RegisterCommand("exitvehicle", function()
     ExitVehicle()
 end, false)
 
--- Register the custom keybinding for exiting the vehicle (defaults to "E")
 RegisterKeyMapping("exitvehicle", "Exit Vehicle", "keyboard", "E")  -- You can change the default key here
 
 -- Add a thread to listen for the key press (and prevent exit if outside a vehicle)
@@ -347,9 +966,61 @@ function Command_Lay(ped)
 end
 
 function Command_StartTrack(dog, player)
+    print("Starting track - Player ID: " .. tostring(player))
+    
     local target = GetPlayerPed(GetPlayerFromServerId(tonumber(player)))
-
-    TaskFollowToOffsetOfEntity(dog, target, 0.5, 0.0, 0.0, 6.0, -1, 0.2, true)
+    
+    if not DoesEntityExist(target) then
+        print("Target not found")
+        return
+    end
+    
+    -- Check if player is in range and has line of sight
+    local dogCoords = GetEntityCoords(dog)
+    local targetCoords = GetEntityCoords(target)
+    local distance = #(dogCoords - targetCoords)
+    local maxRange = 10000.0  -- Increased range
+    
+    if distance > maxRange then
+        TriggerEvent('chatMessage', '', {255, 0, 0}, "^1Target is too far for the dog to track!")
+        return
+    end
+    
+    -- Check if path to target is possible
+    local startTime = GetGameTimer()
+    local canPath = false
+    
+    RequestCollisionAtCoord(targetCoords.x, targetCoords.y, targetCoords.z)
+    while not HasCollisionLoadedAroundEntity(target) and GetGameTimer() - startTime < 1000 do
+        Wait(0)
+    end
+    
+    if GetIsTaskActive(dog, 35) then -- Check if navigation is possible
+        canPath = true
+    end
+    
+    if not canPath then
+        TriggerEvent('chatMessage', '', {255, 0, 0}, "^1Dog cannot pick up the scent from here!")
+        return
+    end
+    
+    ClearPedTasks(dog)
+    
+    -- Enhanced pathing settings
+    SetPedPathCanUseClimbovers(dog, true)
+    SetPedPathCanUseLadders(dog, false)
+    SetPedPathAvoidFire(dog, true)
+    SetPedPathPreferToAvoidWater(dog, true)
+    SetPedMoveRateOverride(dog, 1.25) -- Make movement smoother
+    
+    -- Use both NavMesh and entity following for better tracking
+    TaskGoToEntity(dog, target, -1, 0.5, 12.0, 1077936128, 0)
+    SetPedKeepTask(dog, true)
+    
+    -- Only trigger success message if pathing is established
+    if canPath then
+        TriggerEvent('chatMessage', '', {0, 255, 0}, "^2Dog has picked up the scent!")
+    end
 end
 
 function EnterVehicle(ped)
@@ -408,7 +1079,7 @@ function DismissDog(ped)
 end
 --
 
---[[ Other Functions ]] function AdvancedNotification(icon1, icon2, type, sender, title, text) -- Function to display a notification with image.
+--[[ Other Functions ]] function AdvancedNotification(icon1, icon2, type, sender, title, text)
     Citizen.CreateThread(
         function()
             Wait(1)
@@ -441,28 +1112,24 @@ Citizen.CreateThread(function()
 end)
 
 function KeyboardInput(TextEntry, ExampleText, MaxStringLenght)
-    -- TextEntry --> The Text above the typing field in the black square
-    -- ExampleText --> An Example Text, what it should say in the typing field
-    -- MaxStringLenght --> Maximum String Lenght
 
-    AddTextEntry("FMMC_KEY_TIP1", TextEntry) --Sets the Text above the typing field in the black square
-    DisplayOnscreenKeyboard(1, "FMMC_KEY_TIP1", "", ExampleText, "", "", "", MaxStringLenght) --Actually calls the Keyboard Input
-    blockinput = true --Blocks new input while typing if **blockinput** is used
+    AddTextEntry("FMMC_KEY_TIP1", TextEntry) 
+    DisplayOnscreenKeyboard(1, "FMMC_KEY_TIP1", "", ExampleText, "", "", "", MaxStringLenght) 
+    blockinput = true 
 
-    while (UpdateOnscreenKeyboard() == 0) do --While typing is not aborted and not finished, this loop waits
+    while (UpdateOnscreenKeyboard() == 0) do 
         DisableAllControlActions(0)
         Citizen.Wait(0)
     end
 
     if UpdateOnscreenKeyboard() ~= 2 then
-        local result = GetOnscreenKeyboardResult() --Gets the result of the typing
-        Citizen.Wait(500) --Little Time Delay, so the Keyboard won't open again if you press enter to finish the typing
-        blockinput = false --This unblocks new Input when typing is done
-        return result --Returns the result
+        local result = GetOnscreenKeyboardResult() 
+        Citizen.Wait(500) 
+        blockinput = false 
+        return result 
     else
-        Citizen.Wait(500) --Little Time Delay, so the Keyboard won't open again if you press enter to finish the typing
-        blockinput = false --This unblocks new Input when typing is done
-        return nil --Returns nil if the typing got aborted
+        Citizen.Wait(500) 
+        blockinput = false
+        return nil 
     end
 end
-
